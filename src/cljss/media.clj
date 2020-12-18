@@ -234,44 +234,41 @@
          (clojure.string/join " ")
          (str "@media "))))
 
-(defn compile-media-dispatch [styles]
+(defn compile-media-dispatch [styles _ _]
   (cond
     (contains? styles :media) :media
     (contains? styles :styles) :styles))
 
 (defmulti compile-media #'compile-media-dispatch)
 
-(defmethod compile-media :media [{media :media}]
+(defmethod compile-media :media [{media :media} cls rule-index]
   (->> (seq media)
        (reduce
-         (fn [[sstyles svalues] [query styles]]
-           (let [[static values] (compile-media {:styles styles})
+         (fn [[sstyles svalues nxt-idx] [query styles]]
+           (let [[static values nxt-idx] (compile-media {:styles styles} cls nxt-idx)
                  query (-compile-media-query query)]
-             [(str sstyles query static) (concat svalues values)]))
-         ["" []])))
+             [(str sstyles query static) (concat svalues values) nxt-idx]))
+         ["" [] rule-index])))
 
-(defmethod compile-media :styles [{styles :styles}]
+(defmethod compile-media :styles [{styles :styles} cls rule-index]
   (let [pseudo (filterv utils/pseudo? styles)
-        pstyles (->> pseudo
-                     (reduce
-                       (fn [coll [rule styles]]
-                         (conj coll (c/collect-styles (str (:cls @c/env*) (subs (name rule) 1)) styles)))
-                       []))
+        [pstyles rule-index] (c/collect-dynamic-styles rule-index pseudo cls (fn [rule] (subs (name rule) 1)))
+
         styles (filterv (comp not utils/pseudo?) styles)
-        [static values] (c/collect-styles (:cls @c/env*) styles)
+        [static values rule-index] (c/collect-styles cls styles rule-index)
         values (->> pstyles
                     (mapcat second)
                     (into values))]
     [(str "{" (apply str static (map first pstyles)) "}")
-     values]))
+     values
+     rule-index]))
 
-(defn build-media [styles]
-  (compile-media {:media styles}))
+(defn build-media [cls rule-index styles]
+  (compile-media {:media styles} cls rule-index))
 
 (comment
-  (c/reset-env! {:cls "class"})
-
   (build-media
+    "class"
     {[[:only :screen :and [:min-width "300px"]]
       [:print :and [:color]]]
      {:font-size 'p

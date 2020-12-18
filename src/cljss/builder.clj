@@ -8,30 +8,33 @@
        (map? value)))
 
 (defn build-styles [cls styles]
-  (c/reset-env! {:cls cls})
-  (let [pseudo  (filterv utils/pseudo? styles)
-        nested  (->> styles
-                     (filterv (comp not utils/pseudo?))
-                     (filterv utils/nested?))
-        [mstatic mvals] (some-> styles :cljss.core/media build-media)
-        styles  (dissoc styles :cljss.core/media)
-        styles  (filterv #(and (not (utils/pseudo? %)) (not (utils/nested? %))) styles)
-        [static vals] (c/collect-styles cls styles)
-        pstyles (->> pseudo
-                     (reduce
-                       (fn [coll [rule styles]]
-                         (conj coll (c/collect-styles (str cls (subs (name rule) 1)) styles)))
-                       []))
-        nstyles (->> nested
-                     (reduce
-                       (fn [coll [rule styles]]
-                         (conj coll (c/collect-styles (str cls " " rule) styles)))
-                       []))
-        vals    (->> pstyles
-                     (mapcat second)
-                     (into vals)
-                     (concat mvals)
-                     (into []))
+  (let [rule-index 0
+        pseudo (filterv utils/pseudo? styles)
+        nested (->> styles
+                    (filterv (comp not utils/pseudo?))
+                    (filterv utils/nested?))
+        [mstatic mvals mrule-index] (some-> styles :cljss.core/media ((partial build-media cls rule-index)))
+        rule-index (or mrule-index rule-index)
+        styles (dissoc styles :cljss.core/media)
+        styles (filterv #(and (not (utils/pseudo? %)) (not (utils/nested? %))) styles)
+
+        [static vals rule-index] (c/collect-styles cls styles rule-index)
+        [pstyles rule-index] (c/collect-dynamic-styles
+                               rule-index
+                               pseudo
+                               cls
+                               (fn [rule] (subs (name rule) 1)))
+        [nstyles rule-index] (c/collect-dynamic-styles
+                               rule-index
+                               nested
+                               cls
+                               (fn [rule] (str " " rule)))
+
+        vals (->> pstyles
+                  (mapcat second)
+                  (into vals)
+                  (concat mvals)
+                  (into []))
         vals (->> nstyles
                   (mapcat second)
                   (into vals))

@@ -26,15 +26,8 @@
       (throw (js/Error. (str "A stylesheet can only have " limit " rules"))))
     (when-not (@cache cls-name)
       (swap! cache conj cls-name)
-      (let [rule (if (ifn? rule) (rule) rule)
-            rules-count (gobj/get (gobj/get sheet "cssRules") "length")]
-        (if dev?
-          (dom/appendChild tag (dom/createTextNode rule))
-          (try
-            (.insertRule sheet rule rules-count)
-            (catch :default e
-              (when dev?
-                (js/console.warn "Illegal CSS rule" rule))))))))
+      (let [rule (if (ifn? rule) (rule) rule)]
+        (dom/appendChild tag (dom/createTextNode rule)))))
   (flush! [this]
     (-> tag
         .-parentNode
